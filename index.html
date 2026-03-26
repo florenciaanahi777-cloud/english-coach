@@ -8,23 +8,60 @@
   </head>
   <body>
     <main>
-      <p id="status">Press Start and speak in English</p>
 
-      <button id="main-btn">Start</button>
+      <!-- Block + round indicator (hidden until session starts) -->
+      <div id="session-header" class="hidden">
+        <span id="block-label"></span>
+        <span id="round-label"></span>
+      </div>
 
-      <!-- My words (hidden by default, shown when toggle is on) -->
+      <p id="status">Ready to practice?</p>
+
+      <!-- Main action button -->
+      <button id="main-btn">Begin</button>
+
+      <!-- Score cards (shown after each answer) -->
+      <div id="scores-box" class="hidden">
+        <div class="score-card">
+          <span class="score-label">Clarity</span>
+          <span class="score-value" id="score-clarity">—</span>
+        </div>
+        <div class="score-card">
+          <span class="score-label">Structure</span>
+          <span class="score-value" id="score-structure">—</span>
+        </div>
+        <div class="score-card">
+          <span class="score-label">Impact</span>
+          <span class="score-value" id="score-impact">—</span>
+        </div>
+        <div class="score-card">
+          <span class="score-label">English</span>
+          <span class="score-value" id="score-english">—</span>
+        </div>
+      </div>
+
+      <!-- Micro Activity (text only, no voice) -->
+      <div id="micro-box" class="hidden"></div>
+
+      <!-- End-of-session summary -->
+      <div id="summary-box" class="hidden">
+        <p class="box-label">Session Summary</p>
+        <div id="summary-text"></div>
+      </div>
+
+      <!-- My words (toggle off by default) -->
       <div id="transcript-box" class="hidden">
         <p class="box-label">You said</p>
         <span id="final-text"></span><span id="interim-text"></span>
       </div>
 
-      <!-- Trainer response text (hidden by default, shown when toggle is on) -->
+      <!-- Trainer response text (toggle off by default) -->
       <div id="trainer-box" class="hidden">
         <p class="box-label">Trainer</p>
         <span id="trainer-text"></span>
       </div>
 
-      <!-- Toggles — off by default -->
+      <!-- Toggles -->
       <div id="toggles">
         <label>
           <input type="checkbox" id="show-my-words">
@@ -35,6 +72,7 @@
           Show trainer text
         </label>
       </div>
+
     </main>
     <script src="app.js" defer></script>
   </body>
