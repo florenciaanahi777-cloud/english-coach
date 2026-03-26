@@ -17,9 +17,14 @@ const trainerBox      = document.getElementById('trainer-box');
 const trainerTextEl   = document.getElementById('trainer-text');
 const showMyWords     = document.getElementById('show-my-words');
 const showTrainerTxt  = document.getElementById('show-trainer-text');
-const statsPanel      = document.getElementById('stats-panel');
-const streakDisplay   = document.getElementById('streak-display');
+const statsPanel       = document.getElementById('stats-panel');
+const streakDisplay    = document.getElementById('streak-display');
 const avgScoresDisplay = document.getElementById('avg-scores-display');
+const questionBank     = document.getElementById('question-bank');
+const qbankToggle      = document.getElementById('qbank-toggle');
+const qbankCount       = document.getElementById('qbank-count');
+const qbankList        = document.getElementById('qbank-list');
+const sessionProgress  = document.getElementById('session-progress');
 
 // ─── Base system prompt ───────────────────────────────────────────────────────
 const BASE_PROMPT = `You are an English interview coach for Florencia, a Product UX Designer with 4+ years of experience specializing in complex technical systems — DeFi wallets, B2B SaaS, and fintech platforms. Her key projects: FlexiPaaS (2yr B2B SaaS, sole designer), Xcapit (DeFi wallet, grew to UX Lead), Capsule (NFT marketplace, 50% faster launch), ThorFi (Web3 DApps). She is a native Spanish speaker targeting APAC fintech and Web3 companies in Singapore and Kuala Lumpur.
@@ -118,6 +123,7 @@ const MICRO_CONTENT = {
 
 // ─── LocalStorage ─────────────────────────────────────────────────────────────
 const STORAGE_KEY        = 'english_coach_sessions';
+const QUESTIONS_KEY      = 'english_coach_questions';
 const STREAK_KEY         = 'english_coach_streak';
 
 function loadSessionHistory() {
@@ -195,6 +201,21 @@ function saveSession(summaryText) {
   updateStreak();
 }
 
+function loadQuestions() {
+  try { return JSON.parse(localStorage.getItem(QUESTIONS_KEY)) || []; }
+  catch { return []; }
+}
+
+function saveQuestion(blockType, questionText) {
+  const questions = loadQuestions();
+  questions.unshift({
+    date: new Date().toISOString().split('T')[0],
+    block: blockType === 'warmup' ? 'Warmup' : 'Deep Sim',
+    question: questionText,
+  });
+  localStorage.setItem(QUESTIONS_KEY, JSON.stringify(questions.slice(0, 50)));
+}
+
 function buildHistoryContext() {
   const history = loadSessionHistory();
   if (!history.length) return '';
@@ -241,6 +262,45 @@ Score trend: ${trend} — ${trend === 'improving' ? 'increase difficulty' : tren
 Weakest dimension across sessions: ${weakest || 'unknown'} — weight questions toward this.
 Recent questions asked (avoid repeating these):
 ${recentQuestions || 'none yet'}`;
+}
+
+// ─── Question Bank ────────────────────────────────────────────────────────────
+function renderQuestionBank() {
+  const questions = loadQuestions();
+  if (!questions.length) {
+    questionBank.classList.add('hidden');
+    return;
+  }
+
+  questionBank.classList.remove('hidden');
+  qbankCount.textContent = `· ${questions.length}`;
+
+  qbankList.innerHTML = questions.map(q => `
+    <div class="qbank-item">
+      <p class="qbank-question">${q.question}</p>
+      <div class="qbank-meta">
+        <span class="qbank-tag">${q.block}</span>
+        <span class="qbank-date">${q.date}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+qbankToggle.addEventListener('click', () => {
+  qbankList.classList.toggle('hidden');
+});
+
+// ─── Session progress bar ─────────────────────────────────────────────────────
+const BLOCK_ORDER = ['warmup', 'deepsim', 'micro', 'review'];
+
+function updateSessionProgress(activeBlock) {
+  const activeIdx = BLOCK_ORDER.indexOf(activeBlock);
+  document.querySelectorAll('.progress-step').forEach((step, i) => {
+    step.classList.remove('active', 'done', 'upcoming');
+    if (i < activeIdx) step.classList.add('done');
+    else if (i === activeIdx) step.classList.add('active');
+    else step.classList.add('upcoming');
+  });
 }
 
 // ─── Stats panel ──────────────────────────────────────────────────────────────
@@ -449,7 +509,9 @@ btn.addEventListener('click', () => {
 
 // ─── Session flow ─────────────────────────────────────────────────────────────
 function startSession() {
-  statsPanel.classList.add('hidden'); // hide stats during session
+  statsPanel.classList.add('hidden');
+  questionBank.classList.add('hidden');
+  sessionProgress.classList.remove('hidden');
   SESSION.history = [];
   SESSION.warmupScores = [];
   SESSION.deepSimScores = [];
@@ -467,6 +529,8 @@ function beginBlock(blockName) {
   transcriptBox.classList.add('hidden');
   finalTextEl.textContent = '';
   interimTextEl.textContent = '';
+
+  updateSessionProgress(blockName);
 
   if (blockName === 'warmup') {
     SESSION.maxRounds = 2;
@@ -498,6 +562,7 @@ async function askOpeningQuestion(blockType) {
     const reply = await callAPI(SESSION.history);
     SESSION.history.push({ role: 'assistant', content: reply });
     SESSION.currentQuestion = reply;
+    saveQuestion(blockType, reply);
 
     showCoachText(reply);
     setStatus('Speaking…');
@@ -679,3 +744,4 @@ Keep it under 150 words. Speak warmly but directly. Do not use bullet points or 
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 renderStatsPanel();
+renderQuestionBank();

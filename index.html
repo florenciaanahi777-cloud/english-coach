@@ -9,6 +9,29 @@
   <body>
     <main>
 
+      <!-- Session progress bar (hidden on home screen) -->
+      <div id="session-progress" class="hidden">
+        <div class="progress-step" data-block="warmup">
+          <span class="step-dot"></span>
+          <span class="step-label">Warmup</span>
+        </div>
+        <div class="progress-connector"></div>
+        <div class="progress-step" data-block="deepsim">
+          <span class="step-dot"></span>
+          <span class="step-label">Deep Sim</span>
+        </div>
+        <div class="progress-connector"></div>
+        <div class="progress-step" data-block="micro">
+          <span class="step-dot"></span>
+          <span class="step-label">Vocabulary</span>
+        </div>
+        <div class="progress-connector"></div>
+        <div class="progress-step" data-block="review">
+          <span class="step-dot"></span>
+          <span class="step-label">Review</span>
+        </div>
+      </div>
+
       <!-- Block + round indicator (hidden until session starts) -->
       <div id="session-header" class="hidden">
         <span id="block-label"></span>
@@ -19,6 +42,12 @@
       <div id="stats-panel">
         <div id="streak-display"></div>
         <div id="avg-scores-display"></div>
+      </div>
+
+      <!-- Question Bank — visible on home screen only -->
+      <div id="question-bank" class="hidden">
+        <button id="qbank-toggle">Question Bank <span id="qbank-count"></span></button>
+        <div id="qbank-list" class="hidden"></div>
       </div>
 
       <p id="status">Ready to practice?</p>
