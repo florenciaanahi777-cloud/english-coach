@@ -270,11 +270,23 @@ function buildSystemPrompt() {
   let prompt = BASE_PROMPT;
 
   if (SESSION.block === 'warmup') {
-    prompt += `\n\nCURRENT BLOCK: Warmup (${SESSION.round} of ${SESSION.maxRounds} rounds used so far).
-After Florencia's answer: give specific feedback, then add scores. If rounds remain, ask her to try the same question again with one concrete improvement. If this is the final round, end with: "Nice work. Moving to the portfolio simulation now."`;
+    prompt += `\n\nCURRENT BLOCK: Warmup Interview Practice (${SESSION.maxRounds} rounds total).
+Rules:
+- You asked ONE behavioral question. Coach Florencia through ${SESSION.maxRounds} rounds on that same question.
+- When she answers, start your response by quoting or paraphrasing something specific she said.
+- Give one thing she did well and one concrete thing to improve.
+- End with scores on a new line: SCORES: {"clarity": X, "structure": X, "impact": X, "english": X}
+- If rounds remain: ask her to answer THE SAME question again applying your suggestion.
+- On the final round: give comprehensive feedback, then say "Nice work on the warmup. Moving to the portfolio simulation now."`;
   } else if (SESSION.block === 'deepsim') {
-    prompt += `\n\nCURRENT BLOCK: Deep Simulation (${SESSION.round} of ${SESSION.maxRounds} rounds used so far).
-After Florencia's answer: give specific feedback, then add scores. If rounds remain, ask her to expand or improve a specific dimension. If this is the final round, give comprehensive feedback and end with: "Great work today."`;
+    prompt += `\n\nCURRENT BLOCK: Deep Portfolio Simulation (${SESSION.maxRounds} rounds total).
+Rules:
+- You asked ONE case study question. Coach Florencia through ${SESSION.maxRounds} rounds on that same question.
+- When she answers, start your response by quoting or paraphrasing something specific she said.
+- Give one strength and one specific improvement for this round.
+- End with scores on a new line: SCORES: {"clarity": X, "structure": X, "impact": X, "english": X}
+- If rounds remain: ask her to answer THE SAME question again with your suggested improvement.
+- On the final round: give comprehensive feedback, then say "Great simulation work. Moving to vocabulary practice now."`;
   }
 
   return prompt;
@@ -349,13 +361,13 @@ function beginBlock(blockName) {
     updateHeader('Warmup', '');
     setStatus('Starting warmup…');
     setBtn('…', true);
-    askOpeningQuestion('Ask Florencia one behavioral interview question for a senior UX Designer targeting fintech and Web3 companies in APAC. Ask the question directly without preamble.');
+    askOpeningQuestion('warmup');
   } else if (blockName === 'deepsim') {
     SESSION.maxRounds = 3;
     updateHeader('Deep Simulation', '');
     setStatus('Starting portfolio simulation…');
     setBtn('…', true);
-    askOpeningQuestion('Ask Florencia one portfolio or case study question — she should walk through a specific project in depth. Ask the question directly without preamble.');
+    askOpeningQuestion('deepsim');
   } else if (blockName === 'micro') {
     showMicroActivity();
   } else if (blockName === 'review') {
@@ -363,9 +375,14 @@ function beginBlock(blockName) {
   }
 }
 
-async function askOpeningQuestion(prompt) {
+async function askOpeningQuestion(blockType) {
+  // Clean trigger — the system prompt tells the coach exactly what to do
+  const trigger = blockType === 'warmup'
+    ? 'Please ask me your behavioral interview question.'
+    : 'Please ask me your portfolio case study question.';
+
   try {
-    SESSION.history.push({ role: 'user', content: prompt });
+    SESSION.history.push({ role: 'user', content: trigger });
     const reply = await callAPI(SESSION.history);
     SESSION.history.push({ role: 'assistant', content: reply });
     SESSION.currentQuestion = reply;
@@ -435,7 +452,12 @@ async function handleAnswer(transcript) {
   const isLastRound = SESSION.round >= SESSION.maxRounds;
 
   try {
-    SESSION.history.push({ role: 'user', content: transcript });
+    // Wrap transcript with explicit round instruction so the model knows what to do
+    const roundNote = isLastRound
+      ? `[Round ${SESSION.round} of ${SESSION.maxRounds} — FINAL ROUND. Give comprehensive feedback referencing what I just said. Then wrap up the block.]`
+      : `[Round ${SESSION.round} of ${SESSION.maxRounds}. Give feedback referencing what I just said. Then ask me to try the same question again with one specific improvement.]`;
+
+    SESSION.history.push({ role: 'user', content: `${transcript}\n\n${roundNote}` });
     const rawReply = await callAPI(SESSION.history);
     SESSION.history.push({ role: 'assistant', content: rawReply });
 
