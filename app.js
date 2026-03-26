@@ -1,4 +1,4 @@
-// English Coach — Step 4: Full session structure
+// English Coach — Step 5: localStorage persistence
 
 // ─── Elements ────────────────────────────────────────────────────────────────
 const btn             = document.getElementById('main-btn');
@@ -17,6 +17,9 @@ const trainerBox      = document.getElementById('trainer-box');
 const trainerTextEl   = document.getElementById('trainer-text');
 const showMyWords     = document.getElementById('show-my-words');
 const showTrainerTxt  = document.getElementById('show-trainer-text');
+const statsPanel      = document.getElementById('stats-panel');
+const streakDisplay   = document.getElementById('streak-display');
+const avgScoresDisplay = document.getElementById('avg-scores-display');
 
 // ─── Base system prompt ───────────────────────────────────────────────────────
 const BASE_PROMPT = `You are an English interview coach for Florencia, a Product UX Designer with 4+ years of experience specializing in complex technical systems — DeFi wallets, B2B SaaS, and fintech platforms. Her key projects: FlexiPaaS (2yr B2B SaaS, sole designer), Xcapit (DeFi wallet, grew to UX Lead), Capsule (NFT marketplace, 50% faster launch), ThorFi (Web3 DApps). She is a native Spanish speaker targeting APAC fintech and Web3 companies in Singapore and Kuala Lumpur.
@@ -114,13 +117,68 @@ const MICRO_CONTENT = {
 };
 
 // ─── LocalStorage ─────────────────────────────────────────────────────────────
-const STORAGE_KEY = 'english_coach_sessions';
+const STORAGE_KEY        = 'english_coach_sessions';
+const STREAK_KEY         = 'english_coach_streak';
 
 function loadSessionHistory() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+  catch { return []; }
+}
+
+function loadStreak() {
+  try { return JSON.parse(localStorage.getItem(STREAK_KEY)) || { count: 0, lastDate: null }; }
+  catch { return { count: 0, lastDate: null }; }
+}
+
+function updateStreak() {
+  const today = new Date().toISOString().split('T')[0];
+  const streak = loadStreak();
+  const last = streak.lastDate;
+
+  if (last === today) {
+    // Already practiced today — no change
+    return streak;
+  }
+
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  const newStreak = {
+    count: last === yesterday ? streak.count + 1 : 1,
+    lastDate: today,
+  };
+  localStorage.setItem(STREAK_KEY, JSON.stringify(newStreak));
+  return newStreak;
+}
+
+function avgScores(scoresArr) {
+  if (!scoresArr || !scoresArr.length) return null;
+  const keys = ['clarity', 'structure', 'impact', 'english'];
+  const result = {};
+  keys.forEach(k => {
+    result[k] = Math.round(
+      scoresArr.reduce((sum, s) => sum + (s[k] || 0), 0) / scoresArr.length
+    );
+  });
+  return result;
+}
+
+function getAggregateScores() {
+  // Average across all saved sessions
+  const history = loadSessionHistory();
+  if (!history.length) return null;
+  const keys = ['clarity', 'structure', 'impact', 'english'];
+  const totals = { clarity: 0, structure: 0, impact: 0, english: 0 };
+  let count = 0;
+  history.forEach(s => {
+    [s.warmupScores, s.deepSimScores].forEach(scores => {
+      if (!scores) return;
+      keys.forEach(k => { totals[k] += scores[k] || 0; });
+      count++;
+    });
+  });
+  if (!count) return null;
+  const result = {};
+  keys.forEach(k => { result[k] = Math.round(totals[k] / count); });
+  return result;
 }
 
 function saveSession(summaryText) {
@@ -133,29 +191,79 @@ function saveSession(summaryText) {
     summary: summaryText,
   };
   history.unshift(entry);
-  const trimmed = history.slice(0, 10); // keep last 10
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
-}
-
-function avgScores(scoresArr) {
-  if (!scoresArr.length) return null;
-  const keys = ['clarity', 'structure', 'impact', 'english'];
-  const result = {};
-  keys.forEach(k => {
-    result[k] = Math.round(
-      scoresArr.reduce((sum, s) => sum + (s[k] || 0), 0) / scoresArr.length
-    );
-  });
-  return result;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(history.slice(0, 20)));
+  updateStreak();
 }
 
 function buildHistoryContext() {
   const history = loadSessionHistory();
   if (!history.length) return '';
   const recent = history.slice(0, 5);
-  return '\n\nPREVIOUS SESSIONS:\n' + recent.map(s =>
-    `${s.date}: warmup avg=${JSON.stringify(s.warmupScores)}, deep sim avg=${JSON.stringify(s.deepSimScores)}`
-  ).join('\n');
+
+  // Find weakest dimension across recent sessions
+  const keys = ['clarity', 'structure', 'impact', 'english'];
+  const totals = { clarity: 0, structure: 0, impact: 0, english: 0 };
+  let count = 0;
+  recent.forEach(s => {
+    [s.warmupScores, s.deepSimScores].forEach(sc => {
+      if (!sc) return;
+      keys.forEach(k => { totals[k] += sc[k] || 0; });
+      count++;
+    });
+  });
+  const weakest = count
+    ? keys.reduce((a, b) => totals[a] < totals[b] ? a : b)
+    : null;
+
+  // Score trend (improving or declining?)
+  const trend = recent.length >= 2
+    ? (() => {
+        const latest = avgScores([recent[0].warmupScores, recent[0].deepSimScores].filter(Boolean));
+        const older  = avgScores([recent[recent.length - 1].warmupScores, recent[recent.length - 1].deepSimScores].filter(Boolean));
+        if (!latest || !older) return 'stable';
+        const latestAvg = keys.reduce((s, k) => s + (latest[k] || 0), 0) / keys.length;
+        const olderAvg  = keys.reduce((s, k) => s + (older[k] || 0), 0) / keys.length;
+        if (latestAvg > olderAvg + 0.5) return 'improving';
+        if (latestAvg < olderAvg - 0.5) return 'declining';
+        return 'stable';
+      })()
+    : 'stable';
+
+  const recentQuestions = recent
+    .map(s => s.question)
+    .filter(Boolean)
+    .slice(0, 3)
+    .map(q => `- "${q.slice(0, 80)}..."`)
+    .join('\n');
+
+  return `\n\nSESSION HISTORY (last ${recent.length} sessions):
+Score trend: ${trend} — ${trend === 'improving' ? 'increase difficulty' : trend === 'declining' ? 'ease difficulty slightly' : 'maintain current difficulty'}.
+Weakest dimension across sessions: ${weakest || 'unknown'} — weight questions toward this.
+Recent questions asked (avoid repeating these):
+${recentQuestions || 'none yet'}`;
+}
+
+// ─── Stats panel ──────────────────────────────────────────────────────────────
+function renderStatsPanel() {
+  const streak = loadStreak();
+  const agg = getAggregateScores();
+
+  if (streak.count > 0) {
+    streakDisplay.innerHTML = `<span>${streak.count}-day streak</span> &nbsp;·&nbsp; ${loadSessionHistory().length} sessions total`;
+  } else {
+    streakDisplay.textContent = 'First session — no history yet';
+  }
+
+  if (agg) {
+    const keys = ['clarity', 'structure', 'impact', 'english'];
+    avgScoresDisplay.innerHTML = keys.map(k => {
+      const val = agg[k];
+      const cls = val >= 8 ? 'high' : val >= 5 ? 'mid' : 'low';
+      return `<div class="avg-badge">${k.charAt(0).toUpperCase() + k.slice(1)}<span class="${cls}">${val}</span></div>`;
+    }).join('');
+  } else {
+    avgScoresDisplay.innerHTML = '';
+  }
 }
 
 // ─── Session state ────────────────────────────────────────────────────────────
@@ -267,12 +375,14 @@ function showScoreCards(scores) {
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 function buildSystemPrompt() {
-  let prompt = BASE_PROMPT;
+  const historyCtx = buildHistoryContext();
+  let prompt = BASE_PROMPT + historyCtx;
 
   if (SESSION.block === 'warmup') {
     prompt += `\n\nCURRENT BLOCK: Warmup Interview Practice (${SESSION.maxRounds} rounds total).
 Rules:
-- You asked ONE behavioral question. Coach Florencia through ${SESSION.maxRounds} rounds on that same question.
+- Ask ONE behavioral question (use history context above to avoid repeats and set difficulty).
+- Coach Florencia through ${SESSION.maxRounds} rounds on that same question.
 - When she answers, start your response by quoting or paraphrasing something specific she said.
 - Give one thing she did well and one concrete thing to improve.
 - End with scores on a new line: SCORES: {"clarity": X, "structure": X, "impact": X, "english": X}
@@ -281,7 +391,8 @@ Rules:
   } else if (SESSION.block === 'deepsim') {
     prompt += `\n\nCURRENT BLOCK: Deep Portfolio Simulation (${SESSION.maxRounds} rounds total).
 Rules:
-- You asked ONE case study question. Coach Florencia through ${SESSION.maxRounds} rounds on that same question.
+- Ask ONE case study question (use history context above to avoid repeats and set difficulty).
+- Coach Florencia through ${SESSION.maxRounds} rounds on that same question.
 - When she answers, start your response by quoting or paraphrasing something specific she said.
 - Give one strength and one specific improvement for this round.
 - End with scores on a new line: SCORES: {"clarity": X, "structure": X, "impact": X, "english": X}
@@ -338,6 +449,7 @@ btn.addEventListener('click', () => {
 
 // ─── Session flow ─────────────────────────────────────────────────────────────
 function startSession() {
+  statsPanel.classList.add('hidden'); // hide stats during session
   SESSION.history = [];
   SESSION.warmupScores = [];
   SESSION.deepSimScores = [];
@@ -564,3 +676,6 @@ Keep it under 150 words. Speak warmly but directly. Do not use bullet points or 
     btn.addEventListener('click', () => location.reload(), { once: true });
   }
 }
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+renderStatsPanel();
