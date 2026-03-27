@@ -352,6 +352,13 @@ main {
   color: #333333;
 }
 
+.qbank-empty {
+  font-size: 0.8rem;
+  color: #333333;
+  padding: 0.5rem 0.25rem;
+  text-align: center;
+}
+
 /* ─── Stats panel ────────────────────────────────── */
 #stats-panel {
   display: flex;

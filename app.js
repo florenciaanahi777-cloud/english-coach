@@ -267,12 +267,15 @@ ${recentQuestions || 'none yet'}`;
 // ─── Question Bank ────────────────────────────────────────────────────────────
 function renderQuestionBank() {
   const questions = loadQuestions();
+  questionBank.classList.remove('hidden');
+
   if (!questions.length) {
-    questionBank.classList.add('hidden');
+    qbankCount.textContent = '';
+    qbankList.innerHTML = '<p class="qbank-empty">Questions will appear here after your first session.</p>';
+    qbankList.classList.remove('hidden');
     return;
   }
 
-  questionBank.classList.remove('hidden');
   qbankCount.textContent = `· ${questions.length}`;
 
   qbankList.innerHTML = questions.map(q => `
